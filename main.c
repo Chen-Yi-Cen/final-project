@@ -13,9 +13,30 @@ typedef struct {
     int is_mine;
     int revealed;
     int adjacent_mines;
+    int flagged;
 } Cell;
 
 Cell grid[ROWS][COLS];
+
+void flag_cell(GtkWidget *widget, GdkEventButton *event, gpointer data) {
+    if (event->button == 3) {  // 判斷是否為右鍵
+        int *coords = (int *)data;
+        int row = coords[0];
+        int col = coords[1];
+
+        if (grid[row][col].revealed) {
+            return;  // 如果格子已被揭露，不允許插旗
+        }
+
+        if (grid[row][col].flagged) {  // 如果已插旗，取消旗子
+            gtk_button_set_label(GTK_BUTTON(grid[row][col].button), "");
+            grid[row][col].flagged = 0;
+        } else {  // 如果未插旗，插上旗子
+            gtk_button_set_label(GTK_BUTTON(grid[row][col].button), "F");
+            grid[row][col].flagged = 1;
+        }
+    }
+}
 
 void reset_game(GtkWidget *widget, gpointer data);
 
@@ -47,8 +68,8 @@ int count_adjacent_mines(int row, int col) {
 }
 
 void reveal_cell(int row, int col) {
-    if (row < 0 || row >= ROWS || col < 0 || col >= COLS || grid[row][col].revealed) {
-        return;
+     if (row < 0 || row >= ROWS || col < 0 || col >= COLS || grid[row][col].revealed || grid[row][col].flagged) {
+        return;  // 如果格子超出範圍、已揭露或被插旗，則返回
     }
 
     grid[row][col].revealed = 1;
@@ -106,8 +127,9 @@ void reset_game(GtkWidget *widget, gpointer data) {
             grid[i][j].is_mine = 0;
             grid[i][j].revealed = 0;
             grid[i][j].adjacent_mines = 0;
-            gtk_button_set_label(GTK_BUTTON(grid[i][j].button), "");
-            gtk_widget_set_sensitive(grid[i][j].button, TRUE);
+            grid[i][j].flagged = 0;  // 重置插旗狀態
+            gtk_button_set_label(GTK_BUTTON(grid[i][j].button), "");// 清空標籤
+            gtk_widget_set_sensitive(grid[i][j].button, TRUE);// 重新啟用按鈕
         }
     }
 
@@ -139,6 +161,8 @@ int main(int argc, char *argv[]) {
             int *coords = malloc(2 * sizeof(int));
             coords[0] = i;
             coords[1] = j;
+            // 綁定右鍵點擊事件
+            g_signal_connect(grid[i][j].button, "button-press-event", G_CALLBACK(flag_cell), coords);
             g_signal_connect(grid[i][j].button, "clicked", G_CALLBACK(cell_clicked), coords);
             gtk_grid_attach(GTK_GRID(grid_layout), grid[i][j].button, j, i, 1, 1);
         }
