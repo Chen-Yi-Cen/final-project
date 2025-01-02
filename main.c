@@ -1,5 +1,3 @@
-// cd "C:\Users\user\Desktop\123"
-
 #include <gtk/gtk.h>
 #include <stdlib.h>
 #include <time.h>
@@ -9,24 +7,48 @@
 #define MINES 10
 
 typedef struct {
-    GtkWidget *button;
+    GtkWidget* button;
     int is_mine;
     int revealed;
     int adjacent_mines;
 } Cell;
 
 Cell grid[ROWS][COLS];
+GtkWidget* timer_label;
+int game_time = 0;
+guint timer_id = 0;
 
-void reset_game(GtkWidget *widget, gpointer data);
-
+void reset_game(GtkWidget* widget, gpointer data);
 void reveal_cell(int row, int col);
 
-void end_game(GtkWidget *parent, const char *message) {
-    GtkWidget *dialog = gtk_message_dialog_new(GTK_WINDOW(parent),
-                                               GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
-                                               GTK_MESSAGE_INFO,
-                                               GTK_BUTTONS_OK,
-                                               "%s", message);
+gboolean update_timer(gpointer data) {
+    game_time++;
+    char time_str[16];
+    snprintf(time_str, sizeof(time_str), "Time: %d s", game_time);
+    gtk_label_set_text(GTK_LABEL(timer_label), time_str);
+    return TRUE; // 保持計時器運行
+}
+
+void start_timer() {
+    if (timer_id == 0) { // 防止多重啟動
+        timer_id = g_timeout_add(1000, update_timer, NULL);
+    }
+}
+
+void stop_timer() {
+    if (timer_id != 0) {
+        g_source_remove(timer_id);
+        timer_id = 0;
+    }
+}
+
+void end_game(GtkWidget* parent, const char* message) {
+    stop_timer(); // 停止計時器
+    GtkWidget* dialog = gtk_message_dialog_new(GTK_WINDOW(parent),
+        GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+        GTK_MESSAGE_INFO,
+        GTK_BUTTONS_OK,
+        "%s", message);
     gtk_dialog_run(GTK_DIALOG(dialog));
     gtk_widget_destroy(dialog);
     reset_game(NULL, parent);
@@ -67,7 +89,8 @@ void reveal_cell(int row, int col) {
         char label[2];
         snprintf(label, sizeof(label), "%d", adjacent);
         gtk_button_set_label(GTK_BUTTON(grid[row][col].button), label);
-    } else {
+    }
+    else {
         gtk_button_set_label(GTK_BUTTON(grid[row][col].button), " ");
         for (int i = -1; i <= 1; i++) {
             for (int j = -1; j <= 1; j++) {
@@ -90,15 +113,22 @@ void reveal_cell(int row, int col) {
     }
 }
 
-void cell_clicked(GtkWidget *widget, gpointer data) {
-    int *coords = (int *)data;
+void cell_clicked(GtkWidget* widget, gpointer data) {
+    int* coords = (int*)data;
     int row = coords[0];
     int col = coords[1];
+    if (game_time == 0) { // 在第一次點擊時啟動計時器
+        start_timer();
+    }
     reveal_cell(row, col);
 }
 
-void reset_game(GtkWidget *widget, gpointer data) {
-    GtkWidget *parent = (GtkWidget *)data;
+void reset_game(GtkWidget* widget, gpointer data) {
+    GtkWidget* parent = (GtkWidget*)data;
+    stop_timer(); // 停止計時器
+    game_time = 0;
+    gtk_label_set_text(GTK_LABEL(timer_label), "Time: 0 s");
+
     srand(time(NULL));
 
     for (int i = 0; i < ROWS; i++) {
@@ -122,21 +152,27 @@ void reset_game(GtkWidget *widget, gpointer data) {
     }
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
     gtk_init(&argc, &argv);
 
-    GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    GtkWidget* window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(window), "Minesweeper");
     gtk_window_set_default_size(GTK_WINDOW(window), 400, 400);
     gtk_container_set_border_width(GTK_CONTAINER(window), 10);
 
-    GtkWidget *grid_layout = gtk_grid_new();
-    gtk_container_add(GTK_CONTAINER(window), grid_layout);
+    GtkWidget* vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+    gtk_container_add(GTK_CONTAINER(window), vbox);
+
+    timer_label = gtk_label_new("Time: 0 s");
+    gtk_box_pack_start(GTK_BOX(vbox), timer_label, FALSE, FALSE, 0);
+
+    GtkWidget* grid_layout = gtk_grid_new();
+    gtk_box_pack_start(GTK_BOX(vbox), grid_layout, TRUE, TRUE, 0);
 
     for (int i = 0; i < ROWS; i++) {
         for (int j = 0; j < COLS; j++) {
             grid[i][j].button = gtk_button_new_with_label("");
-            int *coords = malloc(2 * sizeof(int));
+            int* coords = malloc(2 * sizeof(int));
             coords[0] = i;
             coords[1] = j;
             g_signal_connect(grid[i][j].button, "clicked", G_CALLBACK(cell_clicked), coords);
@@ -144,9 +180,9 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    GtkWidget *reset_button = gtk_button_new_with_label("Reset");
+    GtkWidget* reset_button = gtk_button_new_with_label("Reset");
     g_signal_connect(reset_button, "clicked", G_CALLBACK(reset_game), window);
-    gtk_grid_attach(GTK_GRID(grid_layout), reset_button, 0, ROWS, COLS, 1);
+    gtk_box_pack_start(GTK_BOX(vbox), reset_button, FALSE, FALSE, 0);
 
     g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 
